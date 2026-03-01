@@ -1,9 +1,15 @@
 name = "InPlace"
 uuid = "30c0c31a-b6ba-4aed-a015-13f3a1922ad4"
-authors = ["YuttariKanata"]
 version = "1.0.0-DEV"
+authors = ["YuttariKanata"]
+
+[deps]
+GMP_jll = "781609d7-10c4-51f6-84f2-b8444358ff6d"
+MPFR_jll = "3a97d323-0669-5f0c-9066-3539efd106a3"
 
 [compat]
+GMP_jll = "6.3.0"
+MPFR_jll = "4.2.2"
 julia = "1.9"
 
 [extras]
