@@ -3,253 +3,271 @@
 
 using GMP_jll
 using Base.GMP.MPZ: mpz_t, bitcnt_t
-using Base.GMP: CulongMax, ClongMax, CdoubleMax
+using Base.GMP: CulongMax, ClongMax, CdoubleMax, Limb
+using Libdl
 
-# --- Type Aliases ---
-if Clong == Int32
-    const LargeInt = Union{Int64, Int128}
-    const LargeUInt = Union{UInt64, UInt128}
+const Cbitcnt = bitcnt_t
+const mp_limb_t = Limb  # mp_limb_t の実体を確認 (通常は UInt64)
+const mp_size_t = BigInt.types[2]
+
+
+
+if Cint == Int32
+    const CintMax = Union{Int8, Int16, Int32}
 else
-    const LargeInt = Int128
-    const LargeUInt = UInt128
+    const CintMax = Union{Int8, Int16, Int32, Int64}
+end
+if bitcnt_t == UInt32
+    const CbitcntMax = Union{UInt8, UInt16, UInt32}
+else
+    const CbitcntMax = Union{UInt8, UInt16, UInt32, UInt64}
+end
+if Csize_t == UInt32
+    const Csize_tMax = Union{UInt8, UInt16, UInt32}
+else
+    const Csize_tMax = Union{UInt8, UInt16, UInt32, UInt64}
+end
+if mp_size_t == Int32
+    const Cmp_size_tMax = Union{Int8, Int16, Int32}
+else
+    const Cmp_size_tMax = Union{Int8, Int16, Int32, Int64}
+end
+if mp_limb_t == UInt32
+    const Cmp_limb_tMax = Union{UInt8, UInt16, UInt32}
+else
+    const Cmp_limb_tMax = Union{UInt8, UInt16, UInt32, UInt64}
 end
 
-# Helper to construct ccall targets
-gmpz(op::Symbol) = (Symbol(:__g, op), libgmp)
 
-# Helper to map C types to Julia types for function signatures
-function cnv(op::Symbol)::Symbol
-    if op === :mpz_t
-        return :BigInt
-    elseif op === :bitcnt_t
-        return :bitcnt_t
-    elseif op === :Culong
-        return :CulongMax
-    elseif op === :Clong
-        return :ClongMax
-    elseif op === :Cdouble
-        return :CdoubleMax
-    else
-        return Symbol(op, :Max)
-    end
-end
 
-# --- Arithmetic: addmul, submul ---
-for (fname, gmpname, ytype) in [
-    (:addmul!, :mpz_addmul,    :mpz_t ),
-    (:addmul!, :mpz_addmul_ui, :Culong),
-    (:submul!, :mpz_submul,    :mpz_t ),
-    (:submul!, :mpz_submul_ui, :Culong),]
+# --- Type Mapping for Arguments ---
+const TYPE_MAP = Dict(
+    :M   => (BigInt,        :mpz_t         ), # mpz_t
+    :UI  => (CulongMax,     :Culong        ), # unsigned long
+    :SI  => (ClongMax,      :Clong         ), # signed long
+    :I   => (CintMax,       :Cint          ), # int
+    :D   => (CdoubleMax,    :Cdouble       ), # double
+    :BC  => (CbitcntMax,    :bitcnt_t      ), # bit count (Culong)
+    :S   => (Cstring,       :Cstring       ), # char*
+    :PSI => (Ref{Clong},    :(Ptr{Clong})  ), # signed long int *
+    :PUI => (Ref{Culong},   :(Ptr{Culong}) ), # unsigned long int *
+    :SZ  => (Csize_tMax,    :Csize_t       ), # size_t
+    :ML  => (Cmp_limb_tMax, :mp_limb_t     ), # mp_limb_t (ほとんどの64bit環境でCsize_tと同等)
+    :MS  => (Cmp_size_tMax, :mp_size_t     ), # mp_size_t
+)
 
-    @eval begin
-        function $fname(z::BigInt, x::BigInt, y::$(cnv(ytype)))::Nothing
-            ccall($(gmpz(gmpname)), Cvoid, (mpz_t, mpz_t, $ytype), z, x, y)
-            return nothing
+
+
+# --- GMP Function Definitions ---
+# (戻り値の型, 関数名, 引数パターンのリスト)
+const GMP_DEFINITIONS = [
+    # 5.2 Assignment Functions                                     
+    (:Cvoid,     :mpz_set,                 [:M,   :M              ]),
+    (:Cvoid,     :mpz_set_ui,              [:M,   :UI             ]),
+    (:Cvoid,     :mpz_set_si,              [:M,   :SI             ]),
+    (:Cvoid,     :mpz_set_d,               [:M,   :D              ]),
+    (:Cvoid,     :mpz_swap,                [:M,   :M              ]),
+                                                                   
+    # 5.4 Conversion Functions                                     
+    (:Culong,    :mpz_get_ui,              [:M                    ]),
+    (:Clong,     :mpz_get_si,              [:M                    ]),
+    (:Cdouble,   :mpz_get_d,               [:M                    ]),
+    (:Cdouble,   :mpz_get_d_2exp,          [:PSI, :M              ]),
+                                                                   
+    # 5.5 Arithmetic Functions                                     
+    (:Cvoid,     :mpz_add,                 [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_add_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_sub,                 [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_sub_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_ui_sub,              [:M,   :UI,  :M        ]),
+    (:Cvoid,     :mpz_mul,                 [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_mul_si,              [:M,   :M,   :SI       ]),
+    (:Cvoid,     :mpz_mul_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_addmul,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_addmul_ui,           [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_submul,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_submul_ui,           [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_mul_2exp,            [:M,   :M,   :BC       ]),
+    (:Cvoid,     :mpz_neg,                 [:M,   :M              ]),
+    (:Cvoid,     :mpz_abs,                 [:M,   :M              ]),
+                                                                   
+    # 5.6 Division Functions                                       
+    (:Cvoid,     :mpz_cdiv_q,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_cdiv_r,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_cdiv_qr,             [:M,   :M,   :M,   :M  ]),
+    (:Culong,    :mpz_cdiv_q_ui,           [:M,   :M,   :UI       ]),
+    (:Culong,    :mpz_cdiv_r_ui,           [:M,   :M,   :UI       ]),
+    (:Culong,    :mpz_cdiv_qr_ui,          [:M,   :M,   :M,   :UI ]),
+    (:Culong,    :mpz_cdiv_ui,             [:M,   :UI             ]),
+    (:Cvoid,     :mpz_cdiv_q_2exp,         [:M,   :M,   :BC       ]),
+    (:Cvoid,     :mpz_cdiv_r_2exp,         [:M,   :M,   :BC       ]),
+    (:Cvoid,     :mpz_fdiv_q,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_fdiv_r,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_fdiv_qr,             [:M,   :M,   :M,   :M  ]),
+    (:Culong,    :mpz_fdiv_q_ui,           [:M,   :M,   :UI       ]),
+    (:Culong,    :mpz_fdiv_r_ui,           [:M,   :M,   :UI       ]),
+    (:Culong,    :mpz_fdiv_qr_ui,          [:M,   :M,   :M,   :UI ]),
+    (:Culong,    :mpz_fdiv_ui,             [:M,   :UI             ]),
+    (:Cvoid,     :mpz_fdiv_q_2exp,         [:M,   :M,   :BC       ]),
+    (:Cvoid,     :mpz_fdiv_r_2exp,         [:M,   :M,   :BC       ]),
+    (:Cvoid,     :mpz_tdiv_q,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_tdiv_r,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_tdiv_qr,             [:M,   :M,   :M,   :M  ]),
+    (:Culong,    :mpz_tdiv_q_ui,           [:M,   :M,   :UI       ]),
+    (:Culong,    :mpz_tdiv_r_ui,           [:M,   :M,   :UI       ]),
+    (:Culong,    :mpz_tdiv_qr_ui,          [:M,   :M,   :M,   :UI ]),
+    (:Culong,    :mpz_tdiv_ui,             [:M,   :UI             ]),
+    (:Cvoid,     :mpz_tdiv_q_2exp,         [:M,   :M,   :BC       ]),
+    (:Cvoid,     :mpz_tdiv_r_2exp,         [:M,   :M,   :BC       ]),
+    (:Cvoid,     :mpz_mod,                 [:M,   :M,   :M        ]),
+    (:Culong,    :mpz_mod_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_divexact,            [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_divexact_ui,         [:M,   :M,   :UI       ]),
+    (:Cint,      :mpz_divisible_p,         [:M,   :M              ]),
+    (:Cint,      :mpz_divisible_ui_p,      [:M,   :UI             ]),
+    (:Cint,      :mpz_divisible_2exp_p,    [:M,   :BC             ]),
+    (:Cint,      :mpz_congruent_p,         [:M,   :M,   :M        ]),
+    (:Cint,      :mpz_congruent_ui_p,      [:M,   :UI,  :UI       ]),
+    (:Cint,      :mpz_congruent_2exp_p,    [:M,   :M,   :BC       ]),
+                                                                   
+    # 5.7 Exponentiation Functions                                 
+    (:Cvoid,     :mpz_powm,                [:M,   :M,   :M,   :M  ]),
+    (:Cvoid,     :mpz_powm_ui,             [:M,   :M,   :UI,  :M  ]),
+    (:Cvoid,     :mpz_powm_sec,            [:M,   :M,   :M,   :M  ]),
+    (:Cvoid,     :mpz_pow_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_ui_pow_ui,           [:M,   :UI,  :UI       ]),
+                                                                   
+    # 5.8 Root Extraction Functions                                
+    (:Cint,      :mpz_root,                [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_rootrem,             [:M,   :M,   :M,   :UI ]),
+    (:Cvoid,     :mpz_sqrt,                [:M,   :M              ]),
+    (:Cvoid,     :mpz_sqrtrem,             [:M,   :M,   :M        ]),
+    (:Cint,      :mpz_perfect_power_p,     [:M,                   ]),
+    (:Cint,      :mpz_perfect_square_p,    [:M,                   ]),
+                                                                   
+    # 5.9 Number Theoretic                                         
+    (:Cint,      :mpz_probab_prime_p,      [:M,   :I              ]),
+    (:Cvoid,     :mpz_nextprime,           [:M,   :M              ]),
+    (:Cint,      :mpz_prevprime,           [:M,   :M              ]),
+    (:Cvoid,     :mpz_gcd,                 [:M,   :M,   :M        ]),
+    (:Culong,    :mpz_gcd_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_gcdext,              [:M,   :M,   :M,   :M  ]),
+    (:Cvoid,     :mpz_lcm,                 [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_lcm_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_invert,              [:M,   :M,   :M        ]),
+    (:Cint,      :mpz_jacobi,              [:M,   :M              ]),
+    (:Cint,      :mpz_legendre,            [:M,   :M,   :M        ]),
+    (:Cint,      :mpz_kronecker,           [:M,   :M              ]),
+    (:Cint,      :mpz_kronecker_si,        [:M,   :SI             ]),
+    (:Cint,      :mpz_kronecker_ui,        [:M,   :UI             ]),
+    (:Cint,      :mpz_si_kronecker,        [:SI,  :M              ]),
+    (:Cint,      :mpz_ui_kronecker,        [:UI,  :M              ]),
+    (:Cbitcnt,   :mpz_remove,              [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_fac_ui,              [:M,   :UI,            ]),
+    (:Cvoid,     :mpz_2fac_ui,             [:M,   :UI,            ]),
+    (:Cvoid,     :mpz_mfac_uiui,           [:M,   :UI,  :UI       ]),
+    (:Cvoid,     :mpz_primorial_ui,        [:M,   :UI             ]),
+    (:Cvoid,     :mpz_bin_ui,              [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_bin_uiui,            [:M,   :UI,  :UI       ]),
+    (:Cvoid,     :mpz_fib_ui,              [:M,   :UI             ]),
+    (:Cvoid,     :mpz_fib2_ui,             [:M,   :M,   :UI       ]),
+    (:Cvoid,     :mpz_lucnum_ui,           [:M,   :UI             ]),
+    (:Cvoid,     :mpz_lucnum2_ui,          [:M,   :M,   :UI       ]),
+                                                                   
+    # 5.10 Comparison Functions                                    
+    (:Cint,      :mpz_cmp,                 [:M,   :M              ]),
+    (:Cint,      :mpz_cmp_d,               [:M,   :D              ]),
+    (:Cint,      :mpz_cmp_si,              [:M,   :SI             ]),
+    (:Cint,      :mpz_cmp_ui,              [:M,   :UI             ]),
+    (:Cint,      :mpz_cmpabs,              [:M,   :M              ]),
+    (:Cint,      :mpz_cmpabs_d,            [:M,   :D              ]),
+    (:Cint,      :mpz_cmpabs_ui,           [:M,   :UI             ]),
+    (:Cint,      :mpz_sgn,                 [:M,                   ]),
+                                                                   
+    # 5.11 Logical and Bit Manipulation Functions                  
+    (:Cvoid,     :mpz_and,                 [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_ior,                 [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_xor,                 [:M,   :M,   :M        ]),
+    (:Cvoid,     :mpz_com,                 [:M,   :M              ]),
+    (:Cbitcnt,   :mpz_popcount,            [:M,                   ]),
+    (:Cbitcnt,   :mpz_hamdist,             [:M,   :M              ]),
+    (:Cbitcnt,   :mpz_scan0,               [:M,   :BC             ]),
+    (:Cbitcnt,   :mpz_scan1,               [:M,   :BC             ]),
+    (:Cvoid,     :mpz_setbit,              [:M,   :BC             ]),
+    (:Cvoid,     :mpz_clrbit,              [:M,   :BC             ]),
+    (:Cvoid,     :mpz_combit,              [:M,   :BC             ]),
+    (:Cint,      :mpz_tstbit,              [:M,   :BC             ]),
+                                                                   
+    # 5.15 Miscellaneous Function                                  
+    (:Cint,      :mpz_fits_ulong_p,        [:M,                   ]),
+    (:Cint,      :mpz_fits_slong_p,        [:M,                   ]),
+    (:Cint,      :mpz_fits_uint_p,         [:M,                   ]),
+    (:Cint,      :mpz_fits_sint_p,         [:M,                   ]),
+    (:Cint,      :mpz_fits_ushort_p,       [:M,                   ]),
+    (:Cint,      :mpz_fits_sshort_p,       [:M,                   ]),
+    (:Cint,      :mpz_odd_p,               [:M,                   ]),
+    (:Cint,      :mpz_even_p,              [:M,                   ]),
+    (:Csize_t,   :mpz_sizeinbase,          [:M,   :I              ]),
+                                                                   
+    # 5.16 Special Functions                                       
+    (:Csize_t,   :mpz_size,                [:M                    ]),
+    (:mp_limb_t, :mpz_getlimbn,            [:M,   :MS             ]),
+]
+
+
+
+# --- Generation Loop ---
+function gmp_ffi_defining_functions()
+    for (ret_type, fname, arg_keys) in GMP_DEFINITIONS
+        
+        # シンボルが存在しない（純粋なマクロなど）場合はスキップ
+        if !has_gmp_symbol(fname)
+            @warn "GMP symbol __g$fname not found. Skipping auto-definition."
+            continue
         end
-    end
-end
 
-# --- Number Theory: Division & Congruence ---
-for (fname, gmpname, ytype) in [
-    (:isdivisible,      :mpz_divisible_p,      :mpz_t   ),
-    (:isdivisible,      :mpz_divisible_ui_p,   :Culong  ),
-    (:isdivisible_2exp, :mpz_divisible_2exp_p, :bitcnt_t),]
+        j_types = [TYPE_MAP[k][1] for k in arg_keys]
+        c_types = [TYPE_MAP[k][2] for k in arg_keys]
+        args    = [Symbol(:a, i)  for i in 1:lastindex(arg_keys)]
+        
+        # a1::T1, a2::T2...
+        sig = [Expr(:(::), args[i], j_types[i]) for i in 1:lastindex(args)]
+        
+        # Cvoid の場合は Julia 側で Nothing として注釈を付ける
+        j_ret = (ret_type === :Cvoid) ? :Nothing : ret_type
+        
+        gmp_target = (Symbol(:__g, fname), libgmp)
 
-    @eval begin
-        function $fname(n::BigInt, d::$(cnv(ytype)))::Bool
-            return !iszero(ccall($(gmpz(gmpname)), Cint, (mpz_t, $ytype), n, d))
-        end
-    end
-end
-
-for (fname, gmpname, ytype) in [
-    (:divexact!, :mpz_divexact,    :mpz_t ),
-    (:divexact!, :mpz_divexact_ui, :Culong),]
-
-    @eval begin
-        function $fname(z::BigInt, n::BigInt, d::$(cnv(ytype)))::BigInt
-            ccall($(gmpz(gmpname)), Cvoid, (mpz_t, mpz_t, $ytype), z, n, d)
-            return z
+        @eval begin
+            # 戻り値の型 ::$j_ret を追加
+            export $fname
+            function $fname($(sig...))::$j_ret
+                return ccall($gmp_target, $ret_type, ($(c_types...),), $(args...))
+            end
         end
     end
 end
 
 """
-    mod_ui(a::BigInt, b::CulongMax)::Culong
+    has_gmp_symbol(fname::Symbol)
 
-Return `a % b`. Wrapper for `__gmpz_fdiv_ui`.
-Note: This returns a `Culong`, not a `BigInt`.
+libgmp 内に `__gmpz_` + fname というシンボルが存在するかを確認する。
 """
-function mod_ui(a::BigInt, b::CulongMax)::Culong
-    return ccall((:__gmpz_fdiv_ui, libgmp), Culong, (mpz_t, Culong), a, b)
-end
-
-for (fname, gmpname, ytype1, ytype2) in [
-    (:iscongruent,      :mpz_congruent_p,      :mpz_t,  :mpz_t   ),
-    (:iscongruent,      :mpz_congruent_ui_p,   :Culong, :Culong  ),
-    (:iscongruent_2exp, :mpz_congruent_2exp_p, :mpz_t,  :bitcnt_t),]
-
-    @eval begin
-        function $fname(n::BigInt, c::$(cnv(ytype1)), d::$(cnv(ytype2)))::Bool
-            return !iszero(ccall($(gmpz(gmpname)), Cint, (mpz_t, $ytype1, $ytype2), n, c, d))
-        end
-    end
-end
-
-# --- Powers & Roots ---
-function powm!(rop::BigInt, base::BigInt, exp::CulongMax, mod::BigInt)::BigInt
-    ccall((:__gmpz_powm_ui, libgmp), Cvoid, (mpz_t, mpz_t, Culong, mpz_t), rop, base, exp, mod)
-    return rop
-end
-
-function pow_ui!(rop::BigInt, base::CulongMax, exp::CulongMax)::BigInt
-    ccall((:__gmpz_ui_pow_ui, libgmp), Cvoid, (mpz_t, Culong, Culong), rop, base, exp)
-    return rop
-end
-
-function iroot!(z::BigInt, x::BigInt, n::CulongMax)::Bool
-    # Returns true if the root is exact
-    return !iszero(ccall((:__gmpz_root, libgmp), Cint, (mpz_t, mpz_t, Culong), z, x, n))
-end
-
-function rootrem!(root::BigInt, rem::BigInt, x::BigInt, n::CulongMax)::Nothing
-    ccall((:__gmpz_rootrem, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, Culong), root, rem, x, n)
-    return nothing
-end
-
-function sqrtrem!(root::BigInt, rem::BigInt, x::BigInt)::Nothing
-    ccall((:__gmpz_sqrtrem, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t), root, rem, x)
-    return nothing
-end
-
-for (fname, gmpname) in [
-    (:isperfectpower,  :mpz_perfect_power_p ),
-    (:isperfectsquare, :mpz_perfect_square_p),]
-
-    @eval begin
-        function $fname(n::BigInt)::Bool
-            return !iszero(ccall($(gmpz(gmpname)), Cint, (mpz_t,), n))
-        end
-    end
-end
-
-# --- GCD & LCM ---
-function gcd(op1::BigInt, op2::CulongMax)::Culong
-    # Note: Returning Culong directly as per GMP spec for _ui variants
-    return ccall((:__gmpz_gcd_ui, libgmp), Culong, (Ptr{Cvoid}, mpz_t, Culong), C_NULL, op1, op2)
-end
-
-function lcm!(rop::BigInt, op1::BigInt, op2::CulongMax)::BigInt
-    ccall((:__gmpz_lcm_ui, libgmp), Cvoid, (mpz_t, mpz_t, Culong), rop, op1, op2)
-    return rop
-end
-
-# --- Number Theory Special Functions ---
-for (fname, gmpname, ytype1, ytype2) in [
-    (:jacobi,      :mpz_jacobi,       :mpz_t,  :mpz_t ),
-    (:legendre,    :mpz_legendre,     :mpz_t,  :mpz_t ),
-    (:kronecker,   :mpz_kronecker,    :mpz_t,  :mpz_t ),
-    (:kronecker,   :mpz_kronecker_si, :mpz_t,  :Clong ),
-    (:kronecker,   :mpz_kronecker_ui, :mpz_t,  :Culong),
-    (:kronecker,   :mpz_si_kronecker, :Clong,  :mpz_t ),
-    (:kronecker,   :mpz_ui_kronecker, :Culong, :mpz_t ),]
-
-    @eval begin
-        function $fname(n::$(cnv(ytype1)), k::$(cnv(ytype2)))::Cint
-            return ccall($(gmpz(gmpname)), Cint, ($ytype1, $ytype2), n, k)
-        end
-    end
-end
-
-function removefactor!(rop::BigInt, op::BigInt, f::BigInt)::bitcnt_t
-    return ccall((:__gmpz_remove, libgmp), bitcnt_t, (mpz_t, mpz_t, mpz_t), rop, op, f)
-end
-
-# --- Combinatorics ---
-function fac2!(rop::BigInt, n::CulongMax)::BigInt
-    ccall((:__gmpz_2fac_ui, libgmp), Cvoid, (mpz_t, Culong), rop, n)
-    return rop
-end
-
-function facm!(rop::BigInt, n::CulongMax, m::CulongMax)::BigInt
-    ccall((:__gmpz_mfac_uiui, libgmp), Cvoid, (mpz_t, Culong, Culong), rop, n, m)
-    return rop
-end
-
-function primorial!(rop::BigInt, n::CulongMax)::BigInt
-    ccall((:__gmpz_primorial_ui, libgmp), Cvoid, (mpz_t, Culong), rop, n)
-    return rop
-end
-
-function binomial!(rop::BigInt, n::CulongMax, k::CulongMax)::BigInt
-    ccall((:__gmpz_bin_uiui, libgmp), Cvoid, (mpz_t, Culong, Culong), rop, n, k)
-    return rop
-end
-
-# --- Fibonacci & Lucas ---
-for (fname, gmpname) in [(:fibonacci!, :mpz_fib_ui), (:lucas!, :mpz_lucnum_ui)]
-    @eval begin
-        function $fname(rop::BigInt, n::CulongMax)::BigInt
-            ccall($(gmpz(gmpname)), Cvoid, (mpz_t, Culong), rop, n)
-            return rop
-        end
-    end
-end
-
-for (fname, gmpname) in [
-    (:fibonacci2!, :mpz_fib2_ui   ),
-    (:lucas2!,     :mpz_lucnum2_ui),]
-    @eval begin
-        """
-            $($fname)(rop::BigInt, ropsub1::BigInt, n::CulongMax)
-
-        Calculate both `F_n` and `F_{n-1}` (or `L_n` and `L_{n-1}`) and store them in `rop` and `ropsub1`.
-        """
-        function $fname(rop::BigInt, ropsub1::BigInt, n::CulongMax)::Tuple{BigInt, BigInt}
-            ccall($(gmpz(gmpname)), Cvoid, (mpz_t, mpz_t, Culong), rop, ropsub1, n)
-            return (rop, ropsub1)
-        end
-    end
-end
-
-# --- Comparison & Misc ---
-for (gmpname, ytype) in [
-    (:mpz_cmpabs,    :mpz_t  ),
-    (:mpz_cmpabs_d,  :Cdouble),
-    (:mpz_cmpabs_ui, :Culong ),]
+function has_gmp_symbol(fname::Symbol)
+    # libgmp のハンドルを取得（すでにロードされているはずだが安全のために dlopen）
+    lib_handle = dlopen(libgmp)
     
-    @eval begin
-        function cmpabs(op1::BigInt, op2::$(cnv(ytype)))::Cint
-            return ccall($(gmpz(gmpname)), Cint, (mpz_t, $ytype), op1, op2)
-        end
-    end
+    # 実際のシンボル名（__gmpz_...）を生成
+    gmp_sym_name = Symbol(:__g, fname)
+    
+    # シンボルを探す。見つかればそのアドレス（Ptr）、なければ C_NULL を返す
+    ptr = dlsym_e(lib_handle, gmp_sym_name)
+    
+    return ptr != C_NULL
 end
 
-function hamdist(op1::BigInt, op2::BigInt)::bitcnt_t
-    return ccall((:__gmpz_hamdist, libgmp), bitcnt_t, (mpz_t, mpz_t), op1, op2)
-end
+gmp_ffi_defining_functions()
 
-function clrbit!(x::BigInt, a::bitcnt_t)::BigInt
-    ccall((:__gmpz_clrbit, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a)
-    return x
-end
-
-function combit!(x::BigInt, a::bitcnt_t)::BigInt
-    ccall((:__gmpz_combit, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a)
-    return x
-end
-
-for (gmpname, ytype) in [
-    (:mpz_fits_ulong_p,  :Culong ),
-    (:mpz_fits_slong_p,  :Clong  ),
-    (:mpz_fits_uint_p,   :Cuint  ),
-    (:mpz_fits_sint_p,   :Cint   ),
-    (:mpz_fits_ushort_p, :Cushort),
-    (:mpz_fits_sshort_p, :Cshort ),]
-
-    @eval begin
-        function isfit(op::BigInt, ::Type{$ytype})::Bool
-            return !iszero(ccall($(gmpz(gmpname)), Cint, (mpz_t,), op))
-        end
-    end 
-end
+export mpz_mod_ui, mpz_kronecker
+mpz_mod_ui(a1::mpz_t, a2::mpz_t, a3::CulongMax)::Culong = mpz_fdiv_r_ui(a1, a2, a3)
+mpz_kronecker(a1::mpz_t, a2::mpz_t)::Cint = mpz_jacobi(a1, a2)
