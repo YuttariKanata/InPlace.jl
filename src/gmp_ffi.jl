@@ -269,5 +269,5 @@ end
 gmp_ffi_defining_functions()
 
 export mpz_mod_ui, mpz_kronecker
-mpz_mod_ui(a1::mpz_t, a2::mpz_t, a3::CulongMax)::Culong = mpz_fdiv_r_ui(a1, a2, a3)
-mpz_kronecker(a1::mpz_t, a2::mpz_t)::Cint = mpz_jacobi(a1, a2)
+mpz_mod_ui(a1::BigInt, a2::BigInt, a3::CulongMax)::Culong = mpz_fdiv_r_ui(a1, a2, a3)
+mpz_kronecker(a1::BigInt, a2::BigInt)::Cint = mpz_jacobi(a1, a2)
