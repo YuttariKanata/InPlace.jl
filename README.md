@@ -219,12 +219,6 @@ InPlace.jl is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ---
 
-低レベルAPIに関心があるユーザー（あるいは将来の自分）のために、**「`gmp.h` および `mpfr.h` のどの機能がこのライブラリでカバーされているか」**という観点で整理するのは非常に合理的です。
-
-単なる対応表ではなく、GMP/MPFRの公式リファレンスのセクションに基づいたリストにすることで、「この関数群はすべて叩ける」という安心感を与えることができます。以下にその構成案（見本）を示します。
-
----
-
 ## Supported Low-level C APIs
 
 This library provides Julia-side wrappers for the following functional groups defined in `gmp.h` and `mpfr.h`. Each Julia function `f!(rop, ...)` corresponds to its respective C counterpart (e.g., `mpz_f`, `mpfr_f`).[cite: 1, 4]
