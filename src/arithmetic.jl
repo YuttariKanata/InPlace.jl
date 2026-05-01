@@ -195,8 +195,6 @@ end
         mpz_set_si(rop, x)
     elseif x isa NativeUnsignedInt
         mpz_set_ui(rop, x)
-    elseif x < 0
-        mpz_set_si(rop, x)
     else
         mpz_set(rop, _as_bigint(x))
     end
@@ -236,9 +234,9 @@ end
 
 @inline function add!(rop::BigInt, x::BigInt, y::T) where {T <: NativeSignedInt}
     if y < 0
-        mpz_sub_ui(rop, x, -y)
+        mpz_sub_ui(rop, x, Culong(-y))
     else
-        mpz_add_ui(rop, x, y)
+        mpz_add_ui(rop, x, Culong(y))
     end
     return rop
 end
@@ -289,9 +287,9 @@ end
 
 @inline function sub!(rop::BigInt, x::BigInt, y::T) where {T <: NativeSignedInt}
     if y < 0
-        mpz_add_ui(rop, x, -y)
+        mpz_add_ui(rop, x, Culong(-y))
     else
-        mpz_sub_ui(rop, x, y)
+        mpz_sub_ui(rop, x, Culong(y))
     end
     return rop
 end
@@ -303,10 +301,10 @@ end
 
 @inline function sub!(rop::BigInt, x::T, y::BigInt) where {T <: NativeSignedInt}
     if x < 0
-        mpz_add_ui(rop, y, -x)
+        mpz_add_ui(rop, y, Culong(-x))
         mpz_neg(rop, rop)
     else
-        mpz_ui_sub(rop, x, y)
+        mpz_ui_sub(rop, Culong(x), y)
     end
     return rop
 end
@@ -353,10 +351,10 @@ end
 
 @inline function mul!(rop::BigInt, x::BigInt, y::T) where {T <: NativeSignedInt}
     if y < 0
-        mpz_mul_ui(rop, x, -y)
+        mpz_mul_ui(rop, x, Culong(-y))
         mpz_neg(rop, rop)
     else
-        mpz_mul_ui(rop, x, y)
+        mpz_mul_ui(rop, x, Culong(y))
     end
     return rop
 end
@@ -407,9 +405,9 @@ end
 
 @inline function addmul!(rop::BigInt, x::BigInt, y::T) where {T <: NativeSignedInt}
     if y < 0
-        mpz_submul_ui(rop, x, -y)
+        mpz_submul_ui(rop, x, Culong(-y))
     else
-        mpz_addmul_ui(rop, x, y)
+        mpz_addmul_ui(rop, x, Culong(y))
     end
     return rop
 end
@@ -444,9 +442,9 @@ end
 
 @inline function submul!(rop::BigInt, x::BigInt, y::T) where {T <: NativeSignedInt}
     if y < 0
-        mpz_addmul_ui(rop, x, -y)
+        mpz_addmul_ui(rop, x, Culong(-y))
     else
-        mpz_submul_ui(rop, x, y)
+        mpz_submul_ui(rop, x, Culong(y))
     end
     return rop
 end
@@ -476,7 +474,8 @@ end
 end
 
 @inline function mul_2exp!(rop::BigInt, x::Integer, n::Integer)
-    mul_2exp!(rop, _as_bigint(x), n)
+    _checked_nonnegative(Val(:mul_2exp!), n)
+    mpz_mul_2exp(rop, _as_bigint(x), n)
     return rop
 end
 
@@ -495,7 +494,16 @@ end
 end
 
 @inline function div_2exp!(rop::BigInt, x::Integer, n::Integer; rounding::Symbol=:trunc)
-    div_2exp!(rop, _as_bigint(x), n; rounding=rounding)
+    _checked_nonnegative(Val(:div_2exp!), n)
+    if rounding === :trunc
+        mpz_tdiv_q_2exp(rop, _as_bigint(x), n)
+    elseif rounding === :floor
+        mpz_fdiv_q_2exp(rop, _as_bigint(x), n)
+    elseif rounding === :ceil
+        mpz_cdiv_q_2exp(rop, _as_bigint(x), n)
+    else
+        throw(ArgumentError("rounding must be :trunc, :floor, or :ceil"))
+    end
     return rop
 end
 
@@ -509,13 +517,31 @@ end
     return rop
 end
 
+@inline function setbit!(rop::BigInt, bit::Integer)
+    _checked_nonnegative(Val(:setbit!), bit)
+    mpz_setbit(rop, bit)
+    return rop
+end
+
 @inline function clrbit!(rop::BigInt, bit::T) where {T <: NativeInt}
     _checked_nonnegative(Val(:clrbit!), bit)
     mpz_clrbit(rop, bit)
     return rop
 end
 
+@inline function clrbit!(rop::BigInt, bit::Integer)
+    _checked_nonnegative(Val(:clrbit!), bit)
+    mpz_clrbit(rop, bit)
+    return rop
+end
+
 @inline function combit!(rop::BigInt, bit::T) where {T <: NativeInt}
+    _checked_nonnegative(Val(:combit!), bit)
+    mpz_combit(rop, bit)
+    return rop
+end
+
+@inline function combit!(rop::BigInt, bit::Integer)
     _checked_nonnegative(Val(:combit!), bit)
     mpz_combit(rop, bit)
     return rop
@@ -722,7 +748,7 @@ end
 
 @inline function pow!(rop::BigInt, x::BigInt, y::T) where {T <: NativeSignedInt}
     _checked_nonnegative(Val(:pow!), y)
-    mpz_pow_ui(rop, x, y)
+    mpz_pow_ui(rop, x, Culong(y))
     return rop
 end
 
@@ -735,20 +761,21 @@ end
 @inline function pow!(rop::BigInt, x::T, y::U) where {T <: NativeSignedInt, U <: NativeInt}
     _checked_nonnegative(Val(:pow!), y)
     if x < 0
-        mpz_ui_pow_ui(rop, -x, y)
+        mpz_ui_pow_ui(rop, Culong(-x), Culong(y))
         isodd(y) && mpz_neg(rop, rop)
     else
-        mpz_ui_pow_ui(rop, x, y)
+        mpz_ui_pow_ui(rop, Culong(x), Culong(y))
     end
     return rop
 end
 
 @inline function pow!(rop::BigInt, x::Integer, y::Integer)
     _checked_nonnegative(Val(:pow!), y)
-    if x isa BigInt && y isa NativeUnsignedInt
-        pow!(rop, x, y)
+    if y <= typemax(Culong)
+        xb = _as_bigint(x)
+        mpz_pow_ui(rop, xb, Culong(y))
     else
-        pow!(rop, _as_bigint(x), _as_bigint(y))
+        set!(rop, _as_bigint(x) ^ y)
     end
     return rop
 end
@@ -803,7 +830,9 @@ end
 end
 
 @inline function root!(rop::BigInt, x::Integer, n::Integer)
-    return root!(rop, _as_bigint(x), n)
+    _checked_nonnegative(Val(:root!), n)
+    n <= typemax(Culong) || throw(ArgumentError("root! exponent does not fit in Culong"))
+    return mpz_root(rop, _as_bigint(x), Culong(n))
 end
 
 @inline function rootrem!(rop1::BigInt, rop2::BigInt, x::BigInt, n::T) where {T <: NativeUnsignedInt}
@@ -812,7 +841,10 @@ end
 end
 
 @inline function rootrem!(rop1::BigInt, rop2::BigInt, x::Integer, n::Integer)
-    return rootrem!(rop1, rop2, _as_bigint(x), n)
+    _checked_nonnegative(Val(:rootrem!), n)
+    n <= typemax(Culong) || throw(ArgumentError("rootrem! exponent does not fit in Culong"))
+    mpz_rootrem(rop1, rop2, _as_bigint(x), Culong(n))
+    return rop1
 end
 
 # ============================================================================
@@ -921,7 +953,8 @@ end
 end
 
 @inline function invert!(rop::BigInt, x::BigInt, m::BigInt)
-    mpz_invert(rop, x, m)
+    rc = mpz_invert(rop, x, m)
+    rc != 0 || error("inverse does not exist")
     return rop
 end
 
@@ -946,17 +979,36 @@ end
     return rop
 end
 
+@inline function fac_ui!(rop::BigInt, n::Integer)
+    _checked_nonnegative(Val(:fac_ui!), n)
+    n <= typemax(Culong) || throw(ArgumentError("fac_ui! argument does not fit in Culong"))
+    mpz_fac_ui(rop, Culong(n))
+    return rop
+end
+
 @inline function bin_ui!(rop::BigInt, n::BigInt, k::T) where {T <: NativeUnsignedInt}
     mpz_bin_ui(rop, n, k)
     return rop
 end
 
 @inline function bin_ui!(rop::BigInt, n::Integer, k::Integer)
-    return bin_ui!(rop, _as_bigint(n), k)
+    _checked_nonnegative(Val(:bin_ui!), k)
+    k <= typemax(Culong) || throw(ArgumentError("bin_ui! argument does not fit in Culong"))
+    mpz_bin_ui(rop, _as_bigint(n), Culong(k))
+    return rop
 end
 
 @inline function bin_uiui!(rop::BigInt, n::T, k::T) where {T <: NativeUnsignedInt}
     mpz_bin_uiui(rop, n, k)
+    return rop
+end
+
+@inline function bin_uiui!(rop::BigInt, n::Integer, k::Integer)
+    _checked_nonnegative(Val(:bin_uiui!), n)
+    _checked_nonnegative(Val(:bin_uiui!), k)
+    n <= typemax(Culong) || throw(ArgumentError("bin_uiui! argument does not fit in Culong"))
+    k <= typemax(Culong) || throw(ArgumentError("bin_uiui! argument does not fit in Culong"))
+    mpz_bin_uiui(rop, Culong(n), Culong(k))
     return rop
 end
 
@@ -965,8 +1017,22 @@ end
     return rop
 end
 
+@inline function fib_ui!(rop::BigInt, n::Integer)
+    _checked_nonnegative(Val(:fib_ui!), n)
+    n <= typemax(Culong) || throw(ArgumentError("fib_ui! argument does not fit in Culong"))
+    mpz_fib_ui(rop, Culong(n))
+    return rop
+end
+
 @inline function fib2_ui!(rop1::BigInt, rop2::BigInt, n::T) where {T <: NativeUnsignedInt}
     mpz_fib2_ui(rop1, rop2, n)
+    return rop1
+end
+
+@inline function fib2_ui!(rop1::BigInt, rop2::BigInt, n::Integer)
+    _checked_nonnegative(Val(:fib2_ui!), n)
+    n <= typemax(Culong) || throw(ArgumentError("fib2_ui! argument does not fit in Culong"))
+    mpz_fib2_ui(rop1, rop2, Culong(n))
     return rop1
 end
 
@@ -975,8 +1041,22 @@ end
     return rop
 end
 
+@inline function lucnum_ui!(rop::BigInt, n::Integer)
+    _checked_nonnegative(Val(:lucnum_ui!), n)
+    n <= typemax(Culong) || throw(ArgumentError("lucnum_ui! argument does not fit in Culong"))
+    mpz_lucnum_ui(rop, Culong(n))
+    return rop
+end
+
 @inline function lucnum2_ui!(rop1::BigInt, rop2::BigInt, n::T) where {T <: NativeUnsignedInt}
     mpz_lucnum2_ui(rop1, rop2, n)
+    return rop1
+end
+
+@inline function lucnum2_ui!(rop1::BigInt, rop2::BigInt, n::Integer)
+    _checked_nonnegative(Val(:lucnum2_ui!), n)
+    n <= typemax(Culong) || throw(ArgumentError("lucnum2_ui! argument does not fit in Culong"))
+    mpz_lucnum2_ui(rop1, rop2, Culong(n))
     return rop1
 end
 
@@ -1102,7 +1182,10 @@ function set!(rop::BigFloat, s::AbstractString; base::Integer=0, rounding=MPFRRo
 end
 
 @inline function swap!(x::BigFloat, y::BigFloat)
-    mpfr_swap(x, y)
+    tmp = BigFloat(0; precision=precision(x))
+    set!(tmp, x)
+    set!(x, y)
+    set!(y, tmp)
     return x
 end
 

@@ -243,10 +243,10 @@ end
     result = BigInt(0)
     x = BigInt(1000)
     
-    InPlace.add!(result, x, 42_u32)
+    InPlace.add!(result, x, UInt32(42))
     @test result == 1042
     
-    InPlace.add!(result, x, 999_u64)
+    InPlace.add!(result, x, UInt64(999))
     @test result == 1999
 end
 
@@ -255,11 +255,11 @@ end
     x = BigInt(1000)
     
     # Positive signed
-    InPlace.add!(result, x, 42_i64)
+    InPlace.add!(result, x, Int64(42))
     @test result == 1042
     
     # Negative signed
-    InPlace.add!(result, x, -100_i64)
+    InPlace.add!(result, x, Int64(-100))
     @test result == 900
 end
 
@@ -267,7 +267,7 @@ end
     result = BigInt(0)
     x = BigInt(500)
     
-    InPlace.add!(result, 250_u64, x)
+    InPlace.add!(result, UInt64(250), x)
     @test result == 750
 end
 
@@ -304,7 +304,7 @@ end
     result = BigInt(0)
     x = BigInt(1000)
     
-    InPlace.sub!(result, x, 100_u64)
+    InPlace.sub!(result, x, UInt64(100))
     @test result == 900
 end
 
@@ -313,11 +313,11 @@ end
     x = BigInt(1000)
     
     # Positive: normal subtraction
-    InPlace.sub!(result, x, 200_i64)
+    InPlace.sub!(result, x, Int64(200))
     @test result == 800
     
     # Negative: becomes addition
-    InPlace.sub!(result, x, -100_i64)
+    InPlace.sub!(result, x, Int64(-100))
     @test result == 1100
 end
 
@@ -325,7 +325,7 @@ end
     result = BigInt(0)
     y = BigInt(30)
     
-    InPlace.sub!(result, 100_u64, y)
+    InPlace.sub!(result, UInt64(100), y)
     @test result == 70
 end
 
@@ -334,11 +334,11 @@ end
     y = BigInt(50)
     
     # Positive: normal subtraction
-    InPlace.sub!(result, 200_i64, y)
+    InPlace.sub!(result, Int64(200), y)
     @test result == 150
     
     # Negative: becomes negation of sum
-    InPlace.sub!(result, -100_i64, y)
+    InPlace.sub!(result, Int64(-100), y)
     @test result == -150
 end
 
@@ -368,7 +368,7 @@ end
     result = BigInt(0)
     x = BigInt(1000)
     
-    InPlace.mul!(result, x, 7_u64)
+    InPlace.mul!(result, x, UInt64(7))
     @test result == 7000
 end
 
@@ -377,11 +377,11 @@ end
     x = BigInt(100)
     
     # Positive
-    InPlace.mul!(result, x, 5_i64)
+    InPlace.mul!(result, x, Int64(5))
     @test result == 500
     
     # Negative
-    InPlace.mul!(result, x, -3_i64)
+    InPlace.mul!(result, x, Int64(-3))
     @test result == -300
 end
 
@@ -438,7 +438,7 @@ end
     result = BigInt(0)
     x = BigInt(1000)
     
-    InPlace.div!(result, x, 7_u64)
+    InPlace.div!(result, x, UInt64(7))
     @test result == 142
 end
 
@@ -479,7 +479,7 @@ end
     @test result == 6
     
     InPlace.mod!(result, BigInt(-1000), BigInt(7))
-    @test result == 6  # Always non-negative
+    @test result == 1  # Always non-negative
 end
 
 # ============================================================================
@@ -499,7 +499,7 @@ end
     result = BigInt(100)
     x = BigInt(5)
     
-    InPlace.addmul!(result, x, 20_u64)
+    InPlace.addmul!(result, x, UInt64(20))
     @test result == 200  # 100 + 5*20
 end
 
@@ -507,7 +507,7 @@ end
     result = BigInt(100)
     x = BigInt(5)
     
-    InPlace.addmul!(result, x, -10_i64)
+    InPlace.addmul!(result, x, Int64(-10))
     @test result == 50  # 100 - 5*10
 end
 
@@ -524,7 +524,7 @@ end
     result = BigInt(100)
     x = BigInt(5)
     
-    InPlace.submul!(result, x, -10_i64)
+    InPlace.submul!(result, x, Int64(-10))
     @test result == 150  # 100 + 5*10
 end
 
@@ -552,31 +552,31 @@ end
 @testset "BigInt: pow! - Small exponents" begin
     result = BigInt(0)
     
-    InPlace.pow!(result, BigInt(2), 10_u64)
+    InPlace.pow!(result, BigInt(2), UInt64(10))
     @test result == 1024
     
-    InPlace.pow!(result, BigInt(3), 5_u64)
+    InPlace.pow!(result, BigInt(3), UInt64(5))
     @test result == 243
 end
 
 @testset "BigInt: pow! - Large exponents" begin
     result = BigInt(0)
     
-    InPlace.pow!(result, BigInt(2), 100_u64)
+    InPlace.pow!(result, BigInt(2), UInt64(100))
     @test result == big"1267650600228229401496703205376"
 end
 
 @testset "BigInt: pow! - Native base and exponent" begin
     result = BigInt(0)
     
-    InPlace.pow!(result, 2_u64, 20_u64)
+    InPlace.pow!(result, UInt64(2), UInt64(20))
     @test result == 1048576
 end
 
 @testset "BigInt: pow! - Zero exponent" begin
     result = BigInt(0)
     
-    InPlace.pow!(result, 999, 0_u64)
+    InPlace.pow!(result, 999, UInt64(0))
     @test result == 1
 end
 
@@ -638,10 +638,10 @@ end
 @testset "BigInt: root! - N-th root" begin
     result = BigInt(0)
     
-    InPlace.root!(result, BigInt(8), 3_u64)
+    InPlace.root!(result, BigInt(8), UInt64(3))
     @test result == 2  # ∛8
     
-    InPlace.root!(result, BigInt(81), 4_u64)
+    InPlace.root!(result, BigInt(81), UInt64(4))
     @test result == 3  # ⁴√81
 end
 
@@ -649,7 +649,7 @@ end
     root = BigInt(0)
     rem = BigInt(0)
     
-    InPlace.rootrem!(root, rem, BigInt(10), 3_u64)
+    InPlace.rootrem!(root, rem, BigInt(10), UInt64(3))
     @test root == 2
     @test rem == 2
     @test 10 == root^3 + rem
@@ -696,7 +696,7 @@ end
 @testset "BigInt: gcd! - With native UnsignedInt" begin
     result = BigInt(0)
     
-    InPlace.gcd!(result, BigInt(48), 18_u64)
+    InPlace.gcd!(result, BigInt(48), UInt64(18))
     @test result == 6
 end
 
@@ -738,37 +738,37 @@ end
 @testset "BigInt: fac_ui! - Factorial" begin
     result = BigInt(0)
     
-    InPlace.fac_ui!(result, 5_u64)
+    InPlace.fac_ui!(result, UInt64(5))
     @test result == 120
     
-    InPlace.fac_ui!(result, 10_u64)
+    InPlace.fac_ui!(result, UInt64(10))
     @test result == 3628800
 end
 
 @testset "BigInt: bin_ui! - Binomial coefficient" begin
     result = BigInt(0)
     
-    InPlace.bin_ui!(result, BigInt(10), 3_u64)
+    InPlace.bin_ui!(result, BigInt(10), UInt64(3))
     @test result == 120  # C(10,3)
     
-    InPlace.bin_ui!(result, BigInt(5), 2_u64)
+    InPlace.bin_ui!(result, BigInt(5), UInt64(2))
     @test result == 10   # C(5,2)
 end
 
 @testset "BigInt: bin_uiui! - Binomial (both args unsigned)" begin
     result = BigInt(0)
     
-    InPlace.bin_uiui!(result, 10_u64, 3_u64)
+    InPlace.bin_uiui!(result, UInt64(10), UInt64(3))
     @test result == 120
 end
 
 @testset "BigInt: fib_ui! - Fibonacci number" begin
     result = BigInt(0)
     
-    InPlace.fib_ui!(result, 10_u64)
+    InPlace.fib_ui!(result, UInt64(10))
     @test result == 55
     
-    InPlace.fib_ui!(result, 15_u64)
+    InPlace.fib_ui!(result, UInt64(15))
     @test result == 610
 end
 
@@ -776,15 +776,15 @@ end
     f_n = BigInt(0)
     f_n1 = BigInt(0)
     
-    InPlace.fib2_ui!(f_n, f_n1, 10_u64)
+    InPlace.fib2_ui!(f_n, f_n1, UInt64(10))
     @test f_n == 55
-    @test f_n1 == 89
+    @test f_n1 == 34
 end
 
 @testset "BigInt: lucnum_ui! - Lucas number" begin
     result = BigInt(0)
     
-    InPlace.lucnum_ui!(result, 5_u64)
+    InPlace.lucnum_ui!(result, UInt64(5))
     @test result == 11
 end
 
@@ -792,9 +792,9 @@ end
     l_n = BigInt(0)
     l_n1 = BigInt(0)
     
-    InPlace.lucnum2_ui!(l_n, l_n1, 5_u64)
+    InPlace.lucnum2_ui!(l_n, l_n1, UInt64(5))
     @test l_n == 11
-    @test l_n1 == 18
+    @test l_n1 == 7
 end
 
 # ============================================================================
@@ -873,14 +873,14 @@ end
     InPlace.set!(x, 42)
     @test x == 42
     
-    InPlace.set!(x, -999_i64)
+    InPlace.set!(x, Int64(-999))
     @test x == -999
 end
 
 @testset "BigFloat: set! - Float conversion" begin
     x = BigFloat(0; precision=256)
     
-    InPlace.set!(x, 3.14159_f64)
+    InPlace.set!(x, Float64(3.14159))
     @test abs(x - 3.14159) < 1e-5
 end
 
@@ -925,7 +925,7 @@ end
     result = BigFloat(0; precision=256)
     x = BigFloat(2.5; precision=256)
     
-    InPlace.add!(result, x, 1_u64)
+    InPlace.add!(result, x, UInt64(1))
     @test result == 3.5
 end
 
@@ -933,7 +933,7 @@ end
     result = BigFloat(0; precision=256)
     x = BigFloat(2.5; precision=256)
     
-    InPlace.add!(result, x, -1_i64)
+    InPlace.add!(result, x, Int64(-1))
     @test result == 1.5
 end
 
@@ -1252,17 +1252,17 @@ end
 @testset "BigFloat: frac! - Fractional part" begin
     result = BigFloat(0; precision=256)
     
-    InPlace.frac!(result, 2.7)
-    @test abs(result - 0.7) < big"1e-70"
+    InPlace.frac!(result, BigFloat("2.7"; precision=256))
+    @test abs(result - BigFloat("0.7"; precision=256)) < big"1e-70"
 end
 
 @testset "BigFloat: modf! - Split integer and fractional parts" begin
     int_part = BigFloat(0; precision=256)
     frac_part = BigFloat(0; precision=256)
     
-    InPlace.modf!(int_part, frac_part, 2.7)
+    InPlace.modf!(int_part, frac_part, BigFloat("2.7"; precision=256))
     @test int_part == 2.0
-    @test abs(frac_part - 0.7) < big"1e-70"
+    @test abs(frac_part - BigFloat("0.7"; precision=256)) < big"1e-70"
 end
 
 # ============================================================================
