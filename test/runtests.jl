@@ -12,6 +12,8 @@ function mpz_string(x::BigInt; base::Integer=10)
     end
 end
 
+@testset "Low-level GMP/MPFR wrappers" begin
+
 @testset "mpz assignment and conversion" begin
     x = BigInt(0)
     @test InPlace.set!(x, "123456789012345678901234567890";base=10) != 0
@@ -155,8 +157,11 @@ end
     @test :mpfr_set_uj in InPlace.MPFR_MISSING
 end
 
+end # Low-level GMP/MPFR wrappers
 
 ##################################################################################################################################
+
+@testset "BigInt API" begin
 
 # ============================================================================
 # BigInt: Assignment and Conversion Tests
@@ -883,6 +888,10 @@ end
     @test result == 5  # 0101
 end
 
+end # BigInt API
+
+@testset "BigFloat API" begin
+
 # ============================================================================
 # BigFloat: Assignment Tests
 # ============================================================================
@@ -1319,6 +1328,10 @@ end
     @test result < 1.0
 end
 
+end # BigFloat API
+
+@testset "Integration and error behavior" begin
+
 # ============================================================================
 # Rounding Mode Tests
 # ============================================================================
@@ -1382,5 +1395,7 @@ end
     # No modular inverse for non-coprime numbers
     @test_throws ErrorException InPlace.invert!(result, BigInt(4), BigInt(6))
 end
+
+end # Integration and error behavior
 
 println("All tests completed successfully!")
