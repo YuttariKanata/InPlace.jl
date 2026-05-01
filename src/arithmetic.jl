@@ -198,12 +198,13 @@ end
     elseif x < 0
         mpz_set_si(rop, x)
     else
-        mpz_set_ui(rop, x)
+        mpz_set(rop, _as_bigint(x))
     end
     return rop
 end
 
 function set!(rop::BigInt, s::AbstractString; base::Integer=0)
+    0 <= base <= 62 ? base=Cint(base) : throw(ArgumentError("invalid integer string for base $base: $s"))
     rc = mpz_set_str(rop, s, base)
     rc == 0 || throw(ArgumentError("invalid integer string for base $base: $s"))
     return rop
