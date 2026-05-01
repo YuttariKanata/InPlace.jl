@@ -287,6 +287,33 @@ end
     @test result == 1500
 end
 
+@testset "BigInt: operations use C scalar range for wide integer values" begin
+    result = BigInt(0)
+    x = BigInt(1000)
+
+    small_signed = Int64(typemax(Clong))
+    small_unsigned = UInt64(typemax(Culong))
+    wide_unsigned = UInt64(typemax(Culong)) + UInt64(1)
+
+    InPlace.set!(result, small_signed)
+    @test result == small_signed
+
+    InPlace.add!(result, x, small_signed)
+    @test result == x + small_signed
+
+    InPlace.sub!(result, x, small_signed)
+    @test result == x - small_signed
+
+    InPlace.mul!(result, x, small_signed)
+    @test result == x * small_signed
+
+    InPlace.add!(result, x, small_unsigned)
+    @test result == x + small_unsigned
+
+    InPlace.add!(result, x, wide_unsigned)
+    @test result == x + wide_unsigned
+end
+
 # ============================================================================
 # BigInt: Subtraction Tests
 # ============================================================================

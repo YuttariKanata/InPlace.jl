@@ -156,6 +156,11 @@ const FloatLike = Union{AbstractFloat, Integer, BigInt, BigFloat}
 @inline _as_bigint(x::BigInt) = x
 @inline _as_bigint(x::Integer) = BigInt(x)
 
+@inline _fits_clong(x::Integer) = typemin(Clong) <= x <= typemax(Clong)
+@inline _fits_culong(x::Integer) = 0 <= x <= typemax(Culong)
+@inline _as_clong(x::Integer) = Clong(x)
+@inline _as_culong(x::Integer) = Culong(x)
+
 @inline _as_bigfloat(x::BigFloat) = x
 @inline _as_bigfloat(x::FloatLike; precision::Integer=precision(BigFloat)) =
     BigFloat(x; precision=precision)
@@ -195,6 +200,10 @@ end
         mpz_set_si(rop, x)
     elseif x isa NativeUnsignedInt
         mpz_set_ui(rop, x)
+    elseif _fits_clong(x)
+        mpz_set_si(rop, _as_clong(x))
+    elseif _fits_culong(x)
+        mpz_set_ui(rop, _as_culong(x))
     else
         mpz_set(rop, _as_bigint(x))
     end
@@ -248,6 +257,10 @@ end
 @inline function add!(rop::BigInt, x::BigInt, y::Integer)
     if y isa NativeInt
         add!(rop, x, y)
+    elseif _fits_clong(y)
+        add!(rop, x, _as_clong(y))
+    elseif _fits_culong(y)
+        add!(rop, x, _as_culong(y))
     else
         add!(rop, x, _as_bigint(y))
     end
@@ -257,6 +270,10 @@ end
 @inline function add!(rop::BigInt, x::Integer, y::BigInt)
     if x isa NativeInt
         add!(rop, y, x)
+    elseif _fits_clong(x)
+        add!(rop, y, _as_clong(x))
+    elseif _fits_culong(x)
+        add!(rop, y, _as_culong(x))
     else
         add!(rop, _as_bigint(x), y)
     end
@@ -312,6 +329,10 @@ end
 @inline function sub!(rop::BigInt, x::BigInt, y::Integer)
     if y isa NativeInt
         sub!(rop, x, y)
+    elseif _fits_clong(y)
+        sub!(rop, x, _as_clong(y))
+    elseif _fits_culong(y)
+        sub!(rop, x, _as_culong(y))
     else
         sub!(rop, x, _as_bigint(y))
     end
@@ -321,6 +342,10 @@ end
 @inline function sub!(rop::BigInt, x::Integer, y::BigInt)
     if x isa NativeInt
         sub!(rop, x, y)
+    elseif _fits_clong(x)
+        sub!(rop, _as_clong(x), y)
+    elseif _fits_culong(x)
+        sub!(rop, _as_culong(x), y)
     else
         sub!(rop, _as_bigint(x), y)
     end
@@ -366,6 +391,10 @@ end
 @inline function mul!(rop::BigInt, x::BigInt, y::Integer)
     if y isa NativeInt
         mul!(rop, x, y)
+    elseif _fits_clong(y)
+        mul!(rop, x, _as_clong(y))
+    elseif _fits_culong(y)
+        mul!(rop, x, _as_culong(y))
     else
         mul!(rop, x, _as_bigint(y))
     end
@@ -375,6 +404,10 @@ end
 @inline function mul!(rop::BigInt, x::Integer, y::BigInt)
     if x isa NativeInt
         mul!(rop, y, x)
+    elseif _fits_clong(x)
+        mul!(rop, y, _as_clong(x))
+    elseif _fits_culong(x)
+        mul!(rop, y, _as_culong(x))
     else
         mul!(rop, _as_bigint(x), y)
     end
@@ -413,12 +446,16 @@ end
 end
 
 @inline function addmul!(rop::BigInt, x::Integer, y::BigInt)
-    return addmul!(rop, _as_bigint(x), y)
+    return addmul!(rop, y, x)
 end
 
 @inline function addmul!(rop::BigInt, x::BigInt, y::Integer)
     if y isa NativeInt
         addmul!(rop, x, y)
+    elseif _fits_clong(y)
+        addmul!(rop, x, _as_clong(y))
+    elseif _fits_culong(y)
+        addmul!(rop, x, _as_culong(y))
     else
         addmul!(rop, x, _as_bigint(y))
     end
@@ -450,12 +487,16 @@ end
 end
 
 @inline function submul!(rop::BigInt, x::Integer, y::BigInt)
-    return submul!(rop, _as_bigint(x), y)
+    return submul!(rop, y, x)
 end
 
 @inline function submul!(rop::BigInt, x::BigInt, y::Integer)
     if y isa NativeInt
         submul!(rop, x, y)
+    elseif _fits_clong(y)
+        submul!(rop, x, _as_clong(y))
+    elseif _fits_culong(y)
+        submul!(rop, x, _as_culong(y))
     else
         submul!(rop, x, _as_bigint(y))
     end
@@ -588,6 +629,8 @@ end
 @inline function div!(rop::BigInt, x::BigInt, y::Integer; rounding::Symbol=:trunc)
     if y isa NativeUnsignedInt
         div!(rop, x, y; rounding=rounding)
+    elseif _fits_culong(y)
+        div!(rop, x, _as_culong(y); rounding=rounding)
     else
         div!(rop, x, _as_bigint(y); rounding=rounding)
     end
@@ -635,6 +678,8 @@ end
 @inline function rem!(rop::BigInt, x::BigInt, y::Integer; rounding::Symbol=:trunc)
     if y isa NativeUnsignedInt
         rem!(rop, x, y; rounding=rounding)
+    elseif _fits_culong(y)
+        rem!(rop, x, _as_culong(y); rounding=rounding)
     else
         rem!(rop, x, _as_bigint(y); rounding=rounding)
     end
@@ -726,6 +771,8 @@ end
 @inline function divexact!(rop::BigInt, x::BigInt, y::Integer)
     if y isa NativeUnsignedInt
         divexact!(rop, x, y)
+    elseif _fits_culong(y)
+        divexact!(rop, x, _as_culong(y))
     else
         divexact!(rop, x, _as_bigint(y))
     end
