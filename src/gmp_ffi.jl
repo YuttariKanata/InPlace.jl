@@ -10,12 +10,12 @@ const Cbitcnt = bitcnt_t
 const mp_limb_t = Limb
 const mp_size_t = BigInt.types[2]
 
-const CintMax = Union{Int8, Int16, Int32, Int64}
-const CulongArg = Union{Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64}
-const ClongArg = Union{Int8, Int16, Int32, Int64}
+const CintMax = Cint == Int32 ? Union{Int8, Int16, Int32} : Union{Int8, Int16, Int32, Int64}
+const CulongArg = CulongMax
+const ClongArg = ClongMax
 const CbitcntMax = bitcnt_t == UInt32 ? Union{Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32} : Union{Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64}
 const Csize_tMax = Csize_t == UInt32 ? Union{Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32} : Union{Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64}
-const Cmp_size_tMax = Union{Int8, Int16, Int32, Int64}
+const Cmp_size_tMax = CintMax
 const Cmp_limb_tMax = mp_limb_t == UInt32 ? Union{UInt8, UInt16, UInt32} : Union{UInt8, UInt16, UInt32, UInt64}
 
 const CcharPtr = Ptr{UInt8}
@@ -173,10 +173,10 @@ const GMP_DEFINITIONS = [
     (:Cint,      :mpz_prevprime,            [:M,     :M                     ]),
     (:Cvoid,     :mpz_gcd,                  [:M,     :M,     :M             ]),
     (:Culong,    :mpz_gcd_ui,               [:M,     :M,     :UI            ]),
-    (:Cvoid,     :mpz_gcdext,               [:M,     :M,     :M,     :M     ]),
+    (:Cvoid,     :mpz_gcdext,               [:M,     :M,     :M,     :M,     :M]),
     (:Cvoid,     :mpz_lcm,                  [:M,     :M,     :M             ]),
     (:Cvoid,     :mpz_lcm_ui,               [:M,     :M,     :UI            ]),
-    (:Cvoid,     :mpz_invert,               [:M,     :M,     :M             ]),
+    (:Cint,      :mpz_invert,               [:M,     :M,     :M             ]),
     (:Cint,      :mpz_jacobi,               [:M,     :M                     ]),
     (:Cint,      :mpz_legendre,             [:M,     :M                     ]),
     (:Cint,      :mpz_kronecker_si,         [:M,     :SI                    ]),
@@ -303,6 +303,6 @@ export mpz_mod_ui, mpz_kronecker, mpz_sgn, mpz_odd_p, mpz_even_p
 # GMP exposes these as macros or compatibility aliases, not as exported DLL symbols.
 mpz_mod_ui(a1::BigInt, a2::BigInt, a3::CulongArg)::Culong = mpz_fdiv_r_ui(a1, a2, a3)
 mpz_kronecker(a1::BigInt, a2::BigInt)::Cint = mpz_jacobi(a1, a2)
-mpz_sgn(a1::BigInt)::Cint = Cint(sign(mpz_cmp_ui(a1, 0)))
-mpz_odd_p(a1::BigInt)::Cint = mpz_tstbit(a1, 0)
-mpz_even_p(a1::BigInt)::Cint = Cint(mpz_tstbit(a1, 0) == 0)
+mpz_sgn(a1::BigInt)::Cint = Cint(sign(mpz_cmp_ui(a1, Culong(0))))
+mpz_odd_p(a1::BigInt)::Cint = mpz_tstbit(a1, Culong(0))
+mpz_even_p(a1::BigInt)::Cint = Cint(mpz_tstbit(a1, Culong(0)) == 0)
