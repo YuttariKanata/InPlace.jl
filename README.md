@@ -53,6 +53,42 @@ r = BigFloat(0; precision=256)
 sqrt!(r, x; rounding=InPlace.MPFRRoundNearest)
 ```
 
+## Performance
+
+通常のBigInt演算と比べた性能テスト("test/performancetest.jl")の結果はこうです:
+
+```text
+InPlace.jl General Performance Test Suite
+========================================
+--- Test 1: Micro-benchmark (Arithmetic) ---
+Standard Julia (res = a + b):
+  48.617 ms (2000000 allocations: 53.41 MiB)
+InPlace.jl (add!(res, a, b)):
+  4.976 ms (0 allocations: 0 bytes)
+
+--- Test 2: Memory Pressure & GC Impact ---
+Standard Total Time: 0.36s
+InPlace Total Time:  0.007s
+Speedup: 51.85x
+
+--- Test 3: Multi-threaded Scaling (Threads: 1) ---
+Standard Multi-thread: 0.063s
+InPlace  Multi-thread: 0.02s
+
+--- Test 4: BigFloat Precision Scaling ---
+Precision: 128 bits
+  InPlace mul!:   33.769 ns (0 allocations: 0 bytes)
+Precision: 512 bits
+  InPlace mul!:   71.984 ns (0 allocations: 0 bytes)
+Precision: 2048 bits
+  InPlace mul!:   59.105 ns (0 allocations: 0 bytes)
+
+========================================
+Test completed.
+```
+
+これは一例(私の環境での結果)ですが、in-placeになることでGCが抑えられかなりの高速化に成功しています。
+
 ## Common BigInt Operations
 
 ```julia

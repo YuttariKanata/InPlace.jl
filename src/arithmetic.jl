@@ -148,7 +148,7 @@ const NativeSignedInt = ClongMax
 const NativeUnsignedInt = CulongMax
 const NativeInt = Union{NativeSignedInt, NativeUnsignedInt}
 
-const FloatLike = Union{AbstractFloat, Integer, BigInt, BigFloat}
+const FloatLike = Union{AbstractFloat, Integer}
 
 @inline _rounding(r::MPFRRoundingMode) = r
 @inline _rounding(r::RoundingMode) = convert(MPFRRoundingMode, r)
@@ -156,14 +156,17 @@ const FloatLike = Union{AbstractFloat, Integer, BigInt, BigFloat}
 @inline _as_bigint(x::BigInt) = x
 @inline _as_bigint(x::Integer) = BigInt(x)
 
+@inline _fits_clong(x::BigInt) = mpz_fits_slong_p(x) != 0
 @inline _fits_clong(x::Integer) = typemin(Clong) <= x <= typemax(Clong)
+@inline _fits_culong(x::BigInt) = mpz_fits_ulong_p(x) != 0
 @inline _fits_culong(x::Integer) = 0 <= x <= typemax(Culong)
+@inline _as_clong(x::BigInt) = mpz_get_si(x)
 @inline _as_clong(x::Integer) = Clong(x)
+@inline _as_culong(x::BigInt) = mpz_get_ui(x)
 @inline _as_culong(x::Integer) = Culong(x)
 
 @inline _as_bigfloat(x::BigFloat) = x
-@inline _as_bigfloat(x::FloatLike; precision::Integer=precision(BigFloat)) =
-    BigFloat(x; precision=precision)
+@inline _as_bigfloat(x::FloatLike; precision::Integer=precision(BigFloat)) = BigFloat(x; precision=precision)
 
 @inline function _checked_nonnegative(::Val{name}, x::Integer) where {name}
     x < 0 && throw(ArgumentError("$(name) requires a non-negative integer argument"))
