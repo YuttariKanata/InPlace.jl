@@ -55,7 +55,7 @@ sqrt!(r, x; rounding=InPlace.MPFRRoundNearest)
 
 ## Performance
 
-通常のBigInt演算と比べた性能テスト("test/performancetest.jl")の結果はこうです:
+通常のBigInt演算と比べた性能テスト[performancetest.jl](test/performancetest.jl)の結果はこうです:
 
 ```text
 InPlace.jl General Performance Test Suite
@@ -263,7 +263,7 @@ InPlace.jl is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Supported Low-level C APIs
 
-This library provides Julia-side wrappers for the following functional groups defined in `gmp.h` and `mpfr.h`. Each Julia function `f!(rop, ...)` corresponds to its respective C counterpart (e.g., `mpz_f`, `mpfr_f`).[cite: 1, 4]
+This library provides Julia-side wrappers for the following functional groups defined in `gmp.h` and `mpfr.h`. Each Julia function `f!(rop, ...)` corresponds to its respective C counterpart (e.g., `mpz_f`, `mpfr_f`).
 
 ### GNU MP (GMP) Supported Functions
 
