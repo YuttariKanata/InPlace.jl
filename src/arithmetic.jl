@@ -148,7 +148,7 @@ const NativeSignedInt = ClongMax
 const NativeUnsignedInt = CulongMax
 const NativeInt = Union{NativeSignedInt, NativeUnsignedInt}
 
-const FloatLike = Union{AbstractFloat, Integer, BigInt, BigFloat}
+const FloatLike = Union{AbstractFloat, Integer}
 
 @inline _rounding(r::MPFRRoundingMode) = r
 @inline _rounding(r::RoundingMode) = convert(MPFRRoundingMode, r)
@@ -156,14 +156,17 @@ const FloatLike = Union{AbstractFloat, Integer, BigInt, BigFloat}
 @inline _as_bigint(x::BigInt) = x
 @inline _as_bigint(x::Integer) = BigInt(x)
 
+@inline _fits_clong(x::BigInt) = mpz_fits_slong_p(x) != 0
 @inline _fits_clong(x::Integer) = typemin(Clong) <= x <= typemax(Clong)
+@inline _fits_culong(x::BigInt) = mpz_fits_ulong_p(x) != 0
 @inline _fits_culong(x::Integer) = 0 <= x <= typemax(Culong)
+@inline _as_clong(x::BigInt) = mpz_get_si(x)
 @inline _as_clong(x::Integer) = Clong(x)
+@inline _as_culong(x::BigInt) = mpz_get_ui(x)
 @inline _as_culong(x::Integer) = Culong(x)
 
 @inline _as_bigfloat(x::BigFloat) = x
-@inline _as_bigfloat(x::FloatLike; precision::Integer=precision(BigFloat)) =
-    BigFloat(x; precision=precision)
+@inline _as_bigfloat(x::FloatLike; precision::Integer=precision(BigFloat)) = BigFloat(x; precision=precision)
 
 @inline function _checked_nonnegative(::Val{name}, x::Integer) where {name}
     x < 0 && throw(ArgumentError("$(name) requires a non-negative integer argument"))
@@ -174,57 +177,60 @@ end
     return f(rop, _as_bigfloat(x; precision=precision(rop)), _rounding(rounding))
 end
 
+@inline function _C_smallest_fits_type(x::Integer)::DataType
+    if sign(x) == -1
+        if _fits_clong(x)
+            return Clong
+        else
+            return BigInt
+        end
+    elseif _fits_culong(x)
+        return Culong
+    end
+    return BigInt
+end
+
 # ============================================================================
 # BigInt: Basic Arithmetic (Tier 1 + Tier 2 Hybrid)
 # ============================================================================
 
-@inline function set!(rop::BigInt, x::BigInt)
+@inline function set!(rop::BigInt, x::BigInt)::Nothing
     mpz_set(rop, x)
-    return rop
 end
 
-@inline function set!(rop::BigInt, x::T) where {T <: NativeSignedInt}
+@inline function set!(rop::BigInt, x::T)::Nothing where {T <: NativeSignedInt}
     mpz_set_si(rop, x)
-    return rop
 end
 
-@inline function set!(rop::BigInt, x::T) where {T <: NativeUnsignedInt}
+@inline function set!(rop::BigInt, x::T)::Nothing where {T <: NativeUnsignedInt}
     mpz_set_ui(rop, x)
-    return rop
 end
 
-@inline function set!(rop::BigInt, x::Integer)
-    if x isa BigInt
-        mpz_set(rop, x)
-    elseif x isa NativeSignedInt
-        mpz_set_si(rop, x)
-    elseif x isa NativeUnsignedInt
-        mpz_set_ui(rop, x)
-    elseif _fits_clong(x)
-        mpz_set_si(rop, _as_clong(x))
-    elseif _fits_culong(x)
-        mpz_set_ui(rop, _as_culong(x))
-    else
-        mpz_set(rop, _as_bigint(x))
+@inline function set!(rop::BigInt, x::Integer)::Nothing
+    smlt = _C_smallest_fits_type(x)
+    if smlt === BigInt
+        mpz_set(rop,BigInt(smlt))
+    elseif smlt === Clong
+        mpz_set_si(rop,Clong(x))
+    elseif smlt === Culong
+        mpz_set_ui(rop,Culong(x))
     end
-    return rop
 end
 
-function set!(rop::BigInt, s::AbstractString; base::Integer=0)
-    0 <= base <= 62 ? base=Cint(base) : throw(ArgumentError("invalid integer string for base $base: $s"))
-    rc = mpz_set_str(rop, s, base)
-    rc == 0 || throw(ArgumentError("invalid integer string for base $base: $s"))
-    return rop
-end
+# TODO
+# function set!(rop::BigInt, s::AbstractString; base::Integer=0)
+#     0 <= base <= 62 ? base=Cint(base) : throw(ArgumentError("invalid integer string for base $base: $s"))
+#     rc = mpz_set_str(rop, s, base)
+#     rc == 0 || throw(ArgumentError("invalid integer string for base $base: $s"))
+#     return rop
+# end
 
 @inline function set!(rop::BigInt, x::AbstractFloat)
     mpz_set_d(rop, x)
-    return rop
 end
 
 @inline function swap!(x::BigInt, y::BigInt)
     mpz_swap(x, y)
-    return x
 end
 
 # ============================================================================
